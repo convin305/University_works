@@ -1,0 +1,220 @@
+---
+title: "Assignment1"
+author: '20150448'
+date: '2021 3 20 '
+output: html_document
+---
+## htwtbd 자료 설명  
+* htwtbd00.csv : 2021년 온라인으로 수집한 연예인 신체계측자료  
+  * n = 84, 여자 42명(배우40,가수1,개그맨1), 남자 42명(배우40,가수1,개그맨1)  
+
+| *변수* | *설명*|  
+|--------|-------|  
+|name|이름|  
+|gnd|성별(F,M). 이진 판별분석시 타겟|  
+|byr|출생년도|  
+|ht|키(cm) 회귀분석시 타겟|  
+|wt|몸무게(kg)|  
+|bd|혈핵형(A,B,AB,O)|  
+|a|분야(actor,singer,comedian)|  
+
+## 패키지 불러오기
+```{r}
+library(tidyverse)
+library(gridExtra)
+library(scales) #시각화 축 조정
+library(skimr) #기초통계량+결측정보
+library(naniar) #결측정보
+library(corrplot) #상관계수시각화
+```
+
+## 데이터 읽어오기
+```{r}
+DF <- as.data.frame(read_csv('C:/Users/Sum/Desktop/Sumin/06.STUDY/DATA/R/datamining/htwtbd00.csv')) #tibble로 읽어와서 df로 변환하기
+head(DF)
+```
+데이터의 차원 알아보기
+```{r}
+dim(DF)
+```
+데이터 구조 확인
+```{r}
+str(DF)
+```
+
+## 전처리  
+* 나이를 계산해서 age컬럼 추가  
+* 이산형 변수처리 : 문자변수(gnd,bd)를 factor화, {0,1}로 코딩된건 그냥 사용
+```{r}
+DF <- mutate(DF,
+             age = 2021-byr,
+             gnd = factor(gnd),
+             bd = factor(bd),
+             a = factor(a))
+str(DF)
+```
+
+## 기초통계량, 결측파악  
+* skimr::skim() : summary와 결측정보, groupby와 연결된다.  
+* naniar::vis_miss() : 변수별 결측비율 시각화  
+* naniar::miss_var_summary() : 변수별 결측비율 요약
+```{r}
+#전체에 대한 요약 통계량
+skim(DF)
+```
+```{r}
+#변수에 대한 결측비율 
+naniar::vis_miss(DF)#결측치 시각화
+naniar::miss_var_summary(DF) #결측치 요약약
+```
+
+```{r}
+sum(complete.cases(DF))/nrow(DF)*100
+```
+
+완전 관측값 비율이 15%정도, 회귀분석계통 분석방법을 그대로 적용하게 되면 전체 자료의 15%밖에 사용하지 못한다.  
+
+## 탐색  
+### 단변량 탐색  
+* 연속형 변수의 탐색
+  * 수치요약 : 평균, 표준편차  
+    * 시각화 : 히스토그램, density, 상자그림, rug
+```{r}
+summary(DF)
+```
+
+숫자 변수만 가지고, 평균과 표준편차 구하기
+```{r}
+summarize_if(DF, is.numeric, list(mn=mean, sd=sd),na.rm=TRUE)
+```
+키와 몸무게 두 컬럼만을 가지고 평균과 표준편차 구하기
+```{r}
+summarize_at(DF,c('ht','wt'),list(mn=mean,sd=sd),na.rm=TRUE)
+```
+숫자형 변수만 가지고 요약통계
+```{r}
+DF %>% dplyr::select_if(is.numeric) %>% skim()
+```
+
+그래프 그리기
+```{r}
+g1 <- ggplot(DF, aes(x=ht)) + geom_density() + geom_rug()
+g2 <- ggplot(DF, aes(x=ht)) + geom_histogram(color='black', fill='white')
+g3 <- ggplot(DF,aes(x=ht)) +   geom_histogram(aes(y=..density..),color='black',fill='white') + 
+  geom_density(alpha=0.2,fill='#FF6666') + 
+  geom_rug()
+g4 <- ggplot(DF,aes(x=ht)) + geom_boxplot()
+grid.arrange(g1,g2,g3,g4,nrow=2,ncol=2)
+```
+
+* 이산형 변수의 탐색  
+  * 수치요약 : 빈도, 상대빈도  
+  * 시각화 : 막대그래프  
+  
+factor 변수만 가지고 요약통계
+```{r}
+DF %>% dplyr::select_if(is.factor) %>% skim()
+```
+```{r}
+table(DF$gnd)
+
+#빈도표 작성
+xtabs(~bd,data=DF)
+xtabs(~a, data=DF)
+```
+
+그래프 그리기
+```{r}
+g1 <- ggplot(DF, aes(x=gnd)) + geom_bar()
+g2 <- ggplot(DF, aes(x=gnd)) + geom_bar(aes(y=..count../sum(..count..))) + scale_y_continuous(labels = percent)
+g3 <- ggplot(DF, aes(x=bd)) + geom_bar()
+g4 <- ggplot(DF, aes(x=bd)) + geom_bar(aes(y=..count../sum(..count..))) + scale_y_continuous(labels = percent)
+
+grid.arrange(g1,g2,g3,g4,nrow=2,ncol=2)
+```
+
+### 이변량 탐색
+```{r}
+DF %>% group_by(gnd) %>% dplyr::select_if(is.numeric) %>% skim()
+```
+```{r}
+DF %>% group_by(gnd) %>% summarize_at(c('ht','wt'),list(mn=mean,sd=sd),na.rm=TRUE)
+
+DF %>% group_by(gnd) %>% summarise_if(is.numeric, list(mn=mean, sd=sd),na.rm=TRUE)
+```
+그래프 그리기
+```{r}
+g1 <- ggplot(DF, aes(x=ht, col=gnd, fill=gnd)) + geom_density(alpha=0.5)
+g2 <- ggplot(DF, aes(x=ht, col=gnd, fill=gnd)) + geom_histogram(alpha=0.5)
+g3 <- ggplot(DF, aes(x=ht)) + geom_histogram() + facet_grid(gnd~.)
+g4 <- ggplot(DF, aes(x=gnd, y=ht)) + geom_boxplot() + coord_flip() #뒤집기
+
+grid.arrange(g1,g2,g3,g4,nrow=2,ncol=2)
+```
+
+T검정
+```{r}
+t.test(ht~gnd,data=DF, var.equal=TRUE)
+summary(aov(ht~bd,dat=DF))
+```
+
+* 연속~연속
+```{r}
+R <- cor(DF %>% select_if(is.numeric),use='pairwise.complete.obs')
+R
+```
+```{r}
+sort(R['ht',],decreasing = TRUE)
+```
+```{r}
+g1 <- ggplot(DF, aes(x=ftln,y=ht)) + geom_point(alpha=0.5)
+g2 <- ggplot(DF, aes(x=ftln, y=ht, color=gnd, shape=gnd)) + geom_point(alpha=0.5)
+g3 <- ggplot(DF, aes(x=bd, y=ht, color=gnd, shape=gnd)) + geom_point(alpha=0.5)
+g4 <- ggplot(DF, aes(x=bd, y=ht, color=gnd, shape=gnd)) + geom_jitter(alpha=0.5)
+
+grid.arrange(g1,g2,g3,g4,nrow=2, ncol=2)
+```
+```{r}
+corrplot::corrplot.mixed(R,upper='ellipse',order='FPC')
+```
+```{r}
+library(GGally)
+
+ggcorr(DF %>% select_if(is.numeric), geom='tile', label=TRUE)
+```
+```{r}
+ggpairs(DF, columns = c('ht','ftln','wt'),
+        lower=list(continuous=wrap('points', alpha=0.05, col='blue')),
+        diag = list(continuous='barDiag'))
+```
+
+```{r}
+ggplot(DF, aes(x=wt,y=ht)) + geom_density2d() + geom_point(aes(col=gnd, shape=gnd))
+```
+* 이상~ 이산
+```{r}
+g1 <- ggplot(DF, aes(x=bd, fill=gnd)) + geom_bar()
+g2 <- ggplot(DF, aes(x=bd, fill=gnd)) + geom_bar(aes(y=..count../sum(..count..)))
+
+#Or
+tb <- table(DF$gnd, DF$bd)
+tb <- xtabs(~bd+gnd, data=DF)
+df <- data.frame(tb)
+df
+
+g3 <- ggplot(df, aes(x=gnd, y=Freq)) + geom_bar(aes(fill=bd),stat='identity')
+
+tb <- prop.table(xtabs(~gnd+bd, data=DF),1)
+tb
+
+df<- data.frame(tb)
+df
+
+g4 <- ggplot(df,aes(x=gnd, y=Freq)) + geom_bar(aes(fill=bd),stat='identity')
+
+grid.arrange(g1,g2,g3,g4,nrow=2,ncol=2)
+```
+```{r}
+chisq.test(xtabs(~gnd+bd,data=DF),correct = FALSE)
+```
+
