@@ -1,0 +1,203 @@
+---
+title: "Assignment2"
+author: '20150448'
+date: '2021 4 4 '
+output: html_document
+---
+
+|모형|키예측식| 
+|--------|---------|  
+|Mlm     |104.86+5.31gndM-0.06age+0.39wt-0.39wa+2.12hdln+0.02hdwd+1.58ftln-1.09ftwd+0.56bldAB-0.31bldB-0.14bldO+0.19lftY-0.33smkY-0.43alcY   |
+|Mstep   |105.41 + 5.28gndM-0.06age+0.39wt-0.39wa+2.19hdln+1.49ftln-1.04ftwd   |
+
+|모형|RSQ|MSE|MAE|AIC|
+|----|---|---|---|---|
+|Mlm |0.88|9.84|2.5|645.15|
+|Mstep|0.879|10.28|2.53|633.84|
+
+|모형|gnd|age|wt|wa|hdln|hdwd|ftln|ftwd|bld|lft|smk|alc|yhlm|reslm|yhstep|resstep|
+|----|---|---|---|---|---|----|---|-----|--|----|---|---|----|-----|------|-------|
+|no1|M|19|72|900|17.9|8.1|24.3|10.9|B|0|0|1|166.33|1.33|166.95|1.95|
+|no2|M|23|77.8|76.6|20.4|8.3|28.9|10.6|O|0|1|0|186.72|-0.78|186.83|-0.67|
+|no3|F|32|45.7|71.2|17.5|7.3|23.3|8.9|B|0|0|1|156.93|6.63|157.56|7.26|
+|no4|F|30|52|68|16.4|7|23.7|8.4|B|0|0|0|160.02|-8.98|160.11|-8.89|
+
+
+```{r}
+library(tidyverse)
+library(skimr)
+library(naniar)
+library(caret)
+library(corrplot)
+library(GGally)
+library(gridExtra)
+library(MASS)
+```
+
+## 데이터 읽어오기
+
+```{r}
+DF <- as.data.frame(read_csv('C:/Users/Sum/Desktop/Sumin/06.STUDY/DATA/02.R/datamining/data/df2015na.csv'))
+SC <- as.data.frame(read_csv('C:/Users/Sum/Desktop/Sumin/06.STUDY/DATA/02.R/datamining/data/df2015na-sc.csv'))
+
+head(DF)
+head(SC)
+```
+ 
+## 변수 조정
+
+```{r}
+DF <- mutate(DF,
+             gnd = factor(gnd),
+             bld = factor(bld),
+             lft = factor(lft,labels=c("N","Y")),
+             smk = factor(smk,labels=c("N","Y")),
+             alc = factor(alc,labels=c("N","Y"))
+             )
+sapply(DF,class)
+```
+
+## 결측
+```{r}
+skim(DF)
+```
+
+변수별 결측비율
+```{r}
+naniar::vis_miss(DF)
+naniar::miss_var_summary(DF)
+sum(complete.cases(DF))/nrow(DF)*10
+```
+결측 제거
+```{r}
+DF <- na.omit(DF)
+```
+
+## 간단 탐색
+```{r}
+summary(DF)
+```
+```{r}
+featurePlot(x=DF %>% select_if(is.numeric), y = DF$gnd,
+            plot="box", scales = list(x=list(relation = 'free'),
+                                      y=list(relation = 'free')))
+
+featurePlot(x=DF %>% select_if(is.numeric), y = DF$bld,
+            plot="density", scales = list(x=list(relation = 'free'),
+                                      y=list(relation = 'free')))
+
+featurePlot(x=DF %>% select_if(is.numeric), y = DF$lft,
+            plot="strip", scales = list(x=list(relation = 'free'),
+                                      y=list(relation = 'free')))
+
+featurePlot(x=DF %>% select_if(is.numeric), y = DF$smk,
+            plot="strip", scales = list(x=list(relation = 'free'),
+                                      y=list(relation = 'free')))
+featurePlot(x=DF %>% select_if(is.numeric), y = DF$alc,
+            plot="strip", scales = list(x=list(relation = 'free'),
+                                      y=list(relation = 'free')))
+```
+
+연속 ~ 연속 : 연속형 변수간 상관계수 분석
+```{r}
+R <- cor(DF %>% select_if(is.numeric), use='pairwise.complete.obs')
+corrplot::corrplot.mixed(R, upper='ellipse',order='FPC')
+```
+
+```{r}
+ggcorr(DF %>% select_if(is.numeric),
+       geom = 'tile',
+       label = TRUE)
+```
+
+이산 ~ 이산
+```{r}
+g1 <- ggplot(DF, aes(x=gnd, fill=smk)) + geom_bar()
+g2 <- ggplot(DF, aes(x=gnd, fill=alc)) + geom_bar()
+g3 <- ggplot(DF, aes(x=gnd, fill=lft)) + geom_bar()
+
+grid.arrange(g1,g2,g3,nrow=1,ncol=3)
+```
+
+## 회귀분석
+```{r}
+head(SC)
+```
+
+### 선형회귀분석
+
+```{r}
+Mlm <- lm(ht~.,data=DF)
+summary(Mlm)
+```
+
+잔차를 시각화
+```{r}
+plot(Mlm)
+```
+DF에 대해 M0(Mlm)의 성능을 Rsq,MSE,MAE
+```{r}
+anova(Mlm)
+```
+```{r}
+summary(Mlm)
+```
+
+Mlm으로 SC예측하기
+```{r}
+SC <- mutate(SC,
+             gnd = factor(gnd),
+             bld = factor(bld),
+             lft = factor(lft,labels=c("N")),
+             smk = factor(smk,labels=c("N","Y")),
+             alc = factor(alc,labels=c("N","Y"))
+             )
+
+predict(Mlm,newdata=SC)
+
+```
+
+
+```{r}
+yh0 <- predict(Mlm,newdata=DF)
+res0 <- DF$ht-yh0
+
+metric0 <- c(me = mean(res0, na.rm=TRUE),
+             mae = mean(abs(res0), na.rm=TRUE),
+             mse = mean(res0^2, na.rm=TRUE))
+
+metric0
+```
+
+### 변수선택 회귀분석
+```{r}
+Mstep <- stepAIC(Mlm)
+```
+```{r}
+summary(Mstep)
+```
+
+
+잔차 시각화
+```{r}
+plot(Mstep)
+```
+
+```{r}
+anova(Mstep)
+```
+
+```{r}
+predict(Mstep,newdata=SC)
+```
+```{r}
+yh1 <- predict(Mstep,newdata=DF)
+res1 <- DF$ht - yh1
+
+metric1 <- c(me=mean(res1, na.rm= TRUE),
+                mae = mean(abs(res1), na.rm=TRUE),
+             mse = mean(res1^2, na.rm = TRUE))
+
+metric1
+```
+
